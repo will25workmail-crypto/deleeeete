@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Info Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 30px; background: #000000; color: white; }
+        h1 { margin-bottom: 10px; color: white; }
+        input[type="text"] {
+            padding: 12px 20px;
+            width: 500px;
+            max-width: 90%;
+            font-size: 18px;
+            border: 1px solid white;
+            border-radius: 30px;
+            outline: none;
+            background: black;
+            color: white;
+        }
+        input[type="text"]:focus { border-color: white; }
+        input[type="text"]::placeholder { color: #aaaaaa; }
+        #carContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .carBox {
+            border: 1px solid white;
+            border-radius: 8px;
+            padding: 15px;
+            width: 300px;
+            background: black;
+            box-shadow: 0 2px 8px rgba(255,255,255,0.1);
+            text-align: left;
+            color: white;
+            cursor: pointer;
+        }
+        .carBox h3 { margin-top: 0; color: white; }
+        .no-results { font-size: 18px; color: #aaaaaa; margin-top: 40px; }
+        #modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.9); }
+        #modalContent { background-color: black; margin: 15% auto; padding: 30px; border: 1px solid white; width: 90%; max-width: 400px; color: white; text-align: center; border-radius: 12px; }
+        #sellButton {
+            background: black;
+            border: 1px solid white;
+            color: white;
+            padding: 14px 40px;
+            font-size: 20px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #sellButton:hover { background: #111; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>I N V E N T O R Y</h1>
+    <div style="display:flex;justify-content:center;margin:30px 0;">
+        <input type="text" id="searchBar" placeholder="Type to search (toyota, 2023, camry, black…)" autocomplete="off">
+    </div>
+    <div id="carContainer"></div>
+    <!-- Modal -->
+    <div id="modal">
+        <div id="modalContent">
+            <span class="close" onclick="document.getElementById('modal').style.display='none'">×</span>
+            <h2 id="carTitle"></h2>
+            <button id="sellButton">S E L L</button>
+        </div>
+    </div>
+    <script>
+        let allCars = [];
+        let selectedCar = null;
+        async function loadCars() {
+            try {
+                const res = await fetch('https://script.google.com/macros/s/AKfycbxkjft1DREHSK_KzyeUUuQh4H5Q4Ogw2XmLG6ytv9koYUcG4_VM9VSFGdgRA3AA0rvN/exec');
+                allCars = await res.json();
+                displayCars(allCars);
+            } catch (err) {
+                document.getElementById('carContainer').innerHTML = '<p class="no-results">Error loading cars.</p>';
+            }
+        }
+        function displayCars(cars) {
+            const container = document.getElementById('carContainer');
+            if (cars.length === 0) {
+                container.innerHTML = '<p class="no-results">No cars match your search.</p>';
+                return;
+            }
+            container.innerHTML = '';
+            cars.forEach(car => {
+                const box = document.createElement('div');
+                box.className = 'carBox';
+                box.innerHTML = `
+                    <h3>${car.Year || ''} ${car.Make || ''} ${car.Model || ''}</h3>
+                    <p><strong>VIN:</strong> ${car.VIN || 'N/A'}</p>
+                    <p><strong>Trim:</strong> ${car.Trim || 'N/A'}</p>
+                    <p><strong>Color:</strong> ${car.Color || 'N/A'}</p>
+                    <p><strong>Mileage:</strong> ${car.Mileage || 'N/A'}</p>
+                    <p><strong>Price:</strong> $${car["Price (USD)"] || 'N/A'}</p>
+                    <p><strong>Status:</strong> ${car.Status || 'N/A'}</p>
+                    <p><strong>Notes:</strong> ${car.Notes || ''}</p>
+                `;
+                box.onclick = () => {
+                    selectedCar = car;
+                    document.getElementById('carTitle').innerText = `${car.Year || ''} ${car.Make || ''} ${car.Model || ''}`;
+                    document.getElementById('modal').style.display = 'block';
+                };
+                container.appendChild(box);
+            });
+        }
+        document.getElementById('searchBar').addEventListener('input', function () {
+            const term = this.value.trim().toLowerCase();
+            if (term === '') {
+                displayCars(allCars);
+                return;
+            }
+            const filtered = allCars.filter(car => {
+                const searchString = `${car.Year || ''} ${car.Make || ''} ${car.Model || ''} ${car.Trim || ''} ${car.Color || ''} ${car.VIN || ''} ${car.Status || ''} ${car.Notes || ''}`.toLowerCase();
+                return searchString.includes(term);
+            });
+            displayCars(filtered);
+        });
+        document.getElementById('sellButton').onclick = async () => {
+            if (!selectedCar) return;
+            // Build row with only the fields that exist
+            const row = {
+                "Vehicle VIN": selectedCar.VIN || "",
+                "Make": selectedCar.Make || "",
+                "Model": selectedCar.Model || "",
+                "Year": selectedCar.Year || "",
+                "Trim": selectedCar.Trim || "",
+                "Color": selectedCar.Color || "",
+                "Mileage": selectedCar.Mileage || "",
+                "Selling Price": selectedCar["Price (USD)"] || "",
+                "Status": "Sold",
+                "Notes": (selectedCar.Notes || "") + " — Sold via inventory app"
+            };
+            // Store car data, don't send webhook yet
+            document.getElementById('modal').style.display = 'none';
+            allCars = allCars.filter(c => c !== selectedCar);
+            displayCars(allCars);
+            const popup = window.open('', '_blank', 'fullscreen=yes');
+            popup.carDataStored = row;
+            popup.document.write(`
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Leads Viewer</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 30px; background: #000000; color: white; }
+                        h1 { margin-bottom: 10px; color: white; }
+                        input[type="text"] {
+                            padding: 12px 20px;
+                            width: 500px;
+                            max-width: 90%;
+                            font-size: 18px;
+                            border: 1px solid white;
+                            border-radius: 30px;
+                            outline: none;
+                            background: black;
+                            color: white;
+                        }
+                        input[type="text"]:focus { border-color: white; }
+                        input[type="text"]::placeholder { color: #aaaaaa; }
+                        #carContainer {
+                            display: flex;
+                            flex-wrap: wrap;
+                            justify-content: center;
+                            gap: 20px;
+                            margin-top: 30px;
+                        }
+                        .carBox {
+                            border: 1px solid white;
+                            border-radius: 8px;
+                            padding: 15px;
+                            width: 300px;
+                            background: black;
+                            box-shadow: 0 2px 8px rgba(255,255,255,0.1);
+                            text-align: left;
+                            color: white;
+                            cursor: pointer;
+                        }
+                        .carBox h3 { margin-top: 0; color: white; }
+                        .no-results { font-size: 18px; color: #aaaaaa; margin-top: 40px; }
+                        #modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.9); }
+                        #modalContent { background-color: black; margin: 15% auto; padding: 30px; border: 1px solid white; width: 90%; max-width: 400px; color: white; text-align: center; border-radius: 12px; }
+                        #sellButton {
+                            background: black;
+                            border: 1px solid white;
+                            color: white;
+                            padding: 14px 40px;
+                            font-size: 20px;
+                            cursor: pointer;
+                            margin-top: 20px;
+                        }
+                        #sellButton:hover { background: #111; }
+                        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+                    </style>
+                </head>
+                <body>
+                    <h1>I N V E N T O R Y</h1>
+                    <div style="display:flex;justify-content:center;margin:30px 0;">
+                        <input type="text" id="searchBar" placeholder="Type to search (william, hot, 1000000…)" autocomplete="off">
+                    </div>
+                    <div id="carContainer"></div>
+                    <!-- Modal -->
+                    <div id="modal">
+                        <div id="modalContent">
+                            <span class="close" onclick="document.getElementById('modal').style.display='none'">×</span>
+                            <h2 id="carTitle"></h2>
+                            <button id="sellButton">U P L O A D</button>
+                        </div>
+                    </div>
+                    <script>
+                        let allCars = [];
+                        let selectedCar = null;
+                        async function loadCars() {
+                            try {
+                                const res = await fetch('https://script.google.com/macros/s/AKfycbyLi1oqVn7efyYC-XmP7ngra6kUS2CE2_zYC90kjaK0FP-zRsv2J4uuAwBgwUMP-ozLIA/exec');
+                                allCars = await res.json();
+                                displayCars(allCars);
+                            } catch (err) {
+                                document.getElementById('carContainer').innerHTML = '<p class="no-results">Error loading leads.</p>';
+                            }
+                        }
+                        function displayCars(cars) {
+                            const container = document.getElementById('carContainer');
+                            if (cars.length === 0) {
+                                container.innerHTML = '<p class="no-results">No leads match your search.</p>';
+                                return;
+                            }
+                            container.innerHTML = '';
+                            cars.forEach(car => {
+                                const box = document.createElement('div');
+                                box.className = 'carBox';
+                                box.innerHTML = \`
+                                    <h3>\${car["C1: Name"] || ''}</h3>
+                                    <p><strong>Email:</strong> \${car["B1: Email"] || 'N/A'}</p>
+                                    <p><strong>Phone:</strong> \${car["D1: Phone"] || 'N/A'}</p>
+                                    <p><strong>Lead Type:</strong> \${car["A1: Lead Type"] || 'N/A'}</p>
+                                    <p><strong>Budget:</strong> $\${car["E1: Budget"] || 'N/A'}</p>
+                                    <p><strong>Timeline:</strong> \${car["F1: Timeline"] || 'N/A'}</p>
+                                    <p><strong>Vehicle Type:</strong> \${car["G1: Vehicle Type"] || 'N/A'}</p>
+                                    <p><strong>Booking:</strong> \${car["L1: Booking confirmed"] || 'N/A'}</p>
+                                \`;
+                                box.onclick = () => {
+                                    selectedCar = car;
+                                    document.getElementById('carTitle').innerText = car["C1: Name"] || '';
+                                    document.getElementById('modal').style.display = 'block';
+                                };
+                                container.appendChild(box);
+                            });
+                        }
+                        document.getElementById('searchBar').addEventListener('input', function () {
+                            const term = this.value.trim().toLowerCase();
+                            if (term === '') {
+                                displayCars(allCars);
+                                return;
+                            }
+                            const filtered = allCars.filter(car => {
+                                const searchString = \`\${car["C1: Name"] || ''} \${car["B1: Email"] || ''} \${car["D1: Phone"] || ''} \${car["A1: Lead Type"] || ''} \${car["E1: Budget"] || ''} \${car["G1: Vehicle Type"] || ''}\`.toLowerCase();
+                                return searchString.includes(term);
+                            });
+                            displayCars(filtered);
+                        });
+                        document.getElementById('sellButton').onclick = async () => {
+                            if (!selectedCar) return;
+
+                            const row = {
+                                "Name": selectedCar["C1: Name"] || "",
+                                "Email": selectedCar["B1: Email"] || "",
+                                "Phone": selectedCar["D1: Phone"] || "",
+                                "Lead Type": selectedCar["A1: Lead Type"] || "",
+                                "Budget": selectedCar["E1: Budget"] || "",
+                                "Timeline": selectedCar["F1: Timeline"] || "",
+                                "Vehicle Type": selectedCar["G1: Vehicle Type"] || "",
+                                "Booking": selectedCar["L1: Booking confirmed"] || ""
+                            };
+
+                            // Don't send webhook yet - store data and open sales form
+                            document.getElementById('modal').style.display = 'none';
+                            allCars = allCars.filter(c => c !== selectedCar);
+                            displayCars(allCars);
+                            
+                            const salesPopup = window.open('', '_blank', 'width=700,height=800');
+                            salesPopup.carDataStored = window.carDataStored;
+                            salesPopup.leadDataStored = row;
+                            salesPopup.document.write(\`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Sale Details</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 30px; background: #000000; color: white; }
+        h1 { margin-bottom: 10px; color: white; }
+        .form-container { max-width: 600px; margin: 0 auto; text-align: left; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-size: 14px; }
+        input[type="text"], input[type="number"], select {
+            padding: 12px 20px; width: 100%; font-size: 16px; border: 1px solid white;
+            border-radius: 8px; outline: none; background: black; color: white; box-sizing: border-box;
+        }
+        input:focus, select:focus { border-color: white; }
+        select option { background: black; color: white; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        button { background: black; border: 1px solid white; color: white; padding: 14px 40px;
+            font-size: 20px; cursor: pointer; margin-top: 20px; width: 100%; }
+        button:hover { background: #111; }
+        .success-message { display: none; background: #1a4d1a; border: 1px solid white;
+            padding: 15px; border-radius: 8px; text-align: center; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>C O M P L E T E   S A L E</h1>
+    <div class="form-container">
+        <form id="salesForm">
+            <div class="form-group">
+                <label for="saleID">Sale ID *</label>
+                <input type="text" id="saleID" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="dealerCost">Dealer Cost</label>
+                    <input type="number" id="dealerCost" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="discountGiven">Discount Given</label>
+                    <input type="number" id="discountGiven" step="0.01">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="addOnsRevenue">Add-ons Revenue</label>
+                    <input type="number" id="addOnsRevenue" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="financingRevenue">Financing Revenue</label>
+                    <input type="number" id="financingRevenue" step="0.01">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="grossProfit">Gross Profit</label>
+                <input type="number" id="grossProfit" step="0.01">
+            </div>
+            <div class="form-group">
+                <label for="repeatCustomer">Repeat Customer *</label>
+                <select id="repeatCustomer" required>
+                    <option value="">Select...</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="tradeInValue">Trade-In Value</label>
+                    <input type="number" id="tradeInValue" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="reconditioningCost">Reconditioning Cost</label>
+                    <input type="number" id="reconditioningCost" step="0.01">
+                </div>
+            </div>
+            <button type="submit">S U B M I T</button>
+        </form>
+        <div class="success-message" id="successMessage">✓ Sale completed successfully!</div>
+    </div>
+    <script>
+        document.getElementById('salesForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Combine all three data sources
+            const completeData = {
+                ...window.carDataStored,
+                ...window.leadDataStored,
+                "Date of Sale": today,
+                "Sale ID": document.getElementById('saleID').value,
+                "Dealer Cost": document.getElementById('dealerCost').value,
+                "Discount Given": document.getElementById('discountGiven').value,
+                "Add-ons Revenue (warranty, GAP, etc)": document.getElementById('addOnsRevenue').value,
+                "Financing Revenue": document.getElementById('financingRevenue').value,
+                "Gross Profit": document.getElementById('grossProfit').value,
+                "Repeat Customer (Yes/No)": document.getElementById('repeatCustomer').value,
+                "Trade-In Value (if any)": document.getElementById('tradeInValue').value,
+                "Reconditioning Cost": document.getElementById('reconditioningCost').value
+            };
+            
+            try {
+                await fetch('https://ai2325.app.n8n.cloud/webhook/693a532a-f0d6-44c6-a799-1ef8314497d1', {
+                    method: 'POST', mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(completeData)
+                });
+                document.getElementById('successMessage').style.display = 'block';
+                document.getElementById('salesForm').reset();
+                setTimeout(() => { document.getElementById('successMessage').style.display = 'none'; }, 3000);
+            } catch(e) { alert('Error submitting form. Please try again.'); }
+        });
+    <\\/script>
+</body>
+</html>\`);
+                            salesPopup.document.close();
+                        };
+                        loadCars();
+                    <\/script>
+                </body>
+                </html>
+            `);
+            popup.document.close();
+        };
+        loadCars();
+    </script>
+</body>
+</html>
