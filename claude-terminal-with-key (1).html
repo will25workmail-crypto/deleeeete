@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>claude@terminal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d0d0d;
+            font-family: 'Courier New', Courier, monospace;
+            color: #0affaa;
+            height: 100vh;
+            overflow: hidden;
+            text-shadow: 0 0 8px rgba(10, 255, 170, 0.5);
+        }
+
+        .terminal {
+            width: 100%;
+            height: 100vh;
+            background: #0d0d0d;
+            padding: 20px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .terminal-header {
+            color: #0affaa;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #0affaa;
+            padding-bottom: 10px;
+            text-shadow: 0 0 8px rgba(10, 255, 170, 0.5);
+        }
+
+        .message-line {
+            margin: 4px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .user-prompt {
+            color: #0affaa;
+            text-shadow: 0 0 8px rgba(10, 255, 170, 0.5);
+        }
+
+        .user-input {
+            color: #fff;
+        }
+
+        .assistant-response {
+            color: #0affaa;
+            margin-left: 0;
+            text-shadow: 0 0 8px rgba(10, 255, 170, 0.5);
+        }
+
+        .input-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #0d0d0d;
+            padding: 20px;
+            border-top: 1px solid #0affaa;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .prompt-symbol {
+            color: #0affaa;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(10, 255, 170, 0.5);
+        }
+
+        #commandInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            outline: none;
+            caret-color: #0affaa;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: #0affaa;
+            animation: blink 1s infinite;
+            vertical-align: text-bottom;
+            box-shadow: 0 0 8px rgba(10, 255, 170, 0.5);
+        }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        .typing {
+            color: #888;
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0d0d0d;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #0affaa;
+            border: 2px solid #0d0d0d;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .fullscreen-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(10, 255, 170, 0.2);
+            color: #0affaa;
+            border: 1px solid #0affaa;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            z-index: 1000;
+            text-shadow: 0 0 8px rgba(10, 255, 170, 0.5);
+            transition: all 0.3s;
+        }
+
+        .fullscreen-btn:hover {
+            background: rgba(10, 255, 170, 0.3);
+            box-shadow: 0 0 12px rgba(10, 255, 170, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <button class="fullscreen-btn" id="fullscreenBtn">Enter Fullscreen [F11]</button>
+    <div class="terminal" id="terminal">
+        <div class="terminal-header">
+claude@terminal:~$ Connected to Claude AI
+Type your message and press ENTER
+Type 'clear' to clear the terminal
+        </div>
+        <div class="message-line assistant-response">claude: Hello! I'm Claude. How can I help you today?</div>
+    </div>
+
+    <div class="input-container">
+        <span class="prompt-symbol">you@terminal:~$</span>
+        <input 
+            type="text" 
+            id="commandInput" 
+            autocomplete="off"
+            autofocus
+        >
+        <span class="cursor"></span>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const commandInput = document.getElementById('commandInput');
+        const conversationHistory = [];
+        let isProcessing = false;
+
+        // ============================================
+        // 🔑 ADD YOUR API KEY HERE! 🔑
+        // Replace 'YOUR-API-KEY-HERE' with your actual Anthropic API key
+        // ============================================
+        const API_KEY = 'YOUR-API-KEY-HERE';
+        // ============================================
+
+        // Fullscreen functionality
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error('Error attempting to enable fullscreen:', err);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+        // Update button text based on fullscreen state
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                fullscreenBtn.textContent = 'Exit Fullscreen [F11]';
+            } else {
+                fullscreenBtn.textContent = 'Enter Fullscreen [F11]';
+            }
+        });
+
+        // Auto-enter fullscreen on first click anywhere (optional)
+        let hasAutoFullscreen = false;
+        document.addEventListener('click', () => {
+            if (!hasAutoFullscreen && !document.fullscreenElement) {
+                hasAutoFullscreen = true;
+                toggleFullscreen();
+            }
+        }, { once: true });
+
+        function scrollToBottom() {
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function addLine(text, className = '') {
+            const line = document.createElement('div');
+            line.className = `message-line ${className}`;
+            line.textContent = text;
+            terminal.appendChild(line);
+            scrollToBottom();
+        }
+
+        function addUserMessage(message) {
+            addLine(`you@terminal:~$ ${message}`, 'user-prompt');
+        }
+
+        function addAssistantMessage(message) {
+            const lines = message.split('\n');
+            lines.forEach(line => {
+                addLine(`claude: ${line}`, 'assistant-response');
+            });
+        }
+
+        function showTyping() {
+            const typingLine = document.createElement('div');
+            typingLine.className = 'message-line typing';
+            typingLine.id = 'typing-indicator';
+            typingLine.textContent = 'claude: ...';
+            terminal.appendChild(typingLine);
+            scrollToBottom();
+        }
+
+        function hideTyping() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
+        async function processCommand(command) {
+            if (!command.trim()) return;
+
+            // Check if API key is set
+            if (API_KEY === 'YOUR-API-KEY-HERE') {
+                addLine('ERROR: Please add your Anthropic API key to this file!', 'assistant-response');
+                addLine('Open this HTML file in a text editor and replace YOUR-API-KEY-HERE with your actual API key.', 'assistant-response');
+                return;
+            }
+
+            // Handle special commands
+            if (command.toLowerCase() === 'clear') {
+                terminal.innerHTML = `<div class="terminal-header">
+claude@terminal:~$ Connected to Claude AI
+Type your message and press ENTER
+Type 'clear' to clear the terminal
+                </div>`;
+                conversationHistory.length = 0;
+                return;
+            }
+
+            addUserMessage(command);
+            conversationHistory.push({ role: 'user', content: command });
+
+            isProcessing = true;
+            showTyping();
+
+            try {
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': API_KEY,
+                        'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 1000,
+                        messages: conversationHistory
+                    })
+                });
+
+                const data = await response.json();
+                hideTyping();
+
+                if (data.content && data.content[0]) {
+                    const assistantMessage = data.content[0].text;
+                    addAssistantMessage(assistantMessage);
+                    conversationHistory.push({ role: 'assistant', content: assistantMessage });
+                } else if (data.error) {
+                    addLine(`claude: [Error] ${data.error.message}`, 'assistant-response');
+                } else {
+                    addLine('claude: [Error] Failed to get response. Please try again.', 'assistant-response');
+                }
+            } catch (error) {
+                hideTyping();
+                addLine('claude: [Error] Connection failed. Please check your API key and try again.', 'assistant-response');
+                console.error('Error:', error);
+            }
+
+            isProcessing = false;
+        }
+
+        commandInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter' && !isProcessing) {
+                const command = commandInput.value;
+                commandInput.value = '';
+                await processCommand(command);
+            }
+        });
+
+        // Focus input when clicking anywhere
+        document.addEventListener('click', () => {
+            commandInput.focus();
+        });
+
+        // Keep cursor visible only when input is focused
+        commandInput.addEventListener('focus', () => {
+            document.querySelector('.cursor').style.display = 'inline-block';
+        });
+
+        commandInput.addEventListener('blur', () => {
+            document.querySelector('.cursor').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
